@@ -1,0 +1,11 @@
+# Ignore CWRU Data Files
+*.mat
+*.npz
+*.csv
+raw/
+
+# Python and Jupyter Cache
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
