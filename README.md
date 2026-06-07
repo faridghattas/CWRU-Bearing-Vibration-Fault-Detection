@@ -1,39 +1,48 @@
-# CWRU Bearing Vibration Fault Detection: Digital Signal Processing & Rule-Based AI
+# CWRU Bearing Vibration Fault Detection: Digital Signal Processing & Physics-Informed AI
 
 ## 📌 Project Overview
 This project delivers an industrial-grade **Vibration Analysis and Fault Detection Pipeline** utilizing the world-standard **Case Western Reserve University (CWRU) Bearing Dataset**. 
 
-Rather than relying purely on data-driven black-box machine learning, this framework implements core **Digital Signal Processing (DSP)** methodologies—specifically **Fast Fourier Transform (FFT)** and **Envelope Analysis (Hilbert Transform Demodulation)**—coupled with a physical rule-based classifier. The system isolates and diagnoses structural mechanical failures (Inner Race, Outer Race, and Ball Faults) at varying severity levels ($0.007"$, $0.014"$, and $0.021"$).
+Rather than relying blindly on data-driven black-box machine learning, this framework implements core **Digital Signal Processing (DSP)** methodologies—specifically **Fast Fourier Transform (FFT)** and **Envelope Analysis (Hilbert Transform Demodulation)**—coupled with a physics-informed machine learning classifier. The system systematically isolates and diagnoses structural mechanical failures (Inner Race, Outer Race, and Ball Faults) at varying severity levels ($0.007"$, $0.014"$, and $0.021"$).
 
 ---
 
 ## 📊 Methodology & DSP Pipeline
 
 ### 1. Time-Domain Exploration
-Raw acceleration signals sampled at **12 kHz** were extracted from `.mat` files. In the time domain, faulty bearings display distinct periodic impulses (shocks) caused by rolling elements striking localized defects, contrasted against the stationary, low-amplitude profile of a healthy engine.
+Raw continuous acceleration signals sampled at a constant **12 kHz** were extracted from the CWRU MATLAB files (matching variables like `X098_DE_time` and `X110_DE_time`). By segmenting the continuous data, we contrast stable baseline behavior against localized impact mechanics. In the time domain, the healthy bearing displays a stationary, low-amplitude profile, whereas the faulty bearing exhibits distinct periodic impulse shocks caused by rolling elements striking the localized defect.
 
 ### 2. Fast Fourier Transform (FFT)
-The signal was mapped from the Time Domain to the Frequency Domain using FFT. The operating frequency ($1\times \text{RPM}$) and its higher harmonics ($2\times, 3\times \text{RPM}$) were calculated to screen for synchronous macro-faults like unbalance or misalignment.
+To map the discrete vibration vectors from the Time Domain into the Frequency Domain, a standard FFT was executed. The spectrum's magnitude was symmetrically isolated and normalized ($2.0 / N$) to analyze pure physical amplitudes up to the Nyquist frequency. While the standard FFT clearly identifies the motor's operating conditions, early-stage bearing micro-faults remain heavily masked by background high-frequency structural resonances.
 
-### 3. Envelope Analysis (High-Frequency Demodulation)
-Early-stage bearing defects generate low-energy micro-impacts that are easily masked by high-frequency structural noise in a standard FFT. To extract these latent structural signatures:
-* The raw signal was bandpass-filtered around the structural resonance zone.
-* An **Envelope Amplitude Demodulation** was executed via the **Hilbert Transform**.
-* This isolates the impact repetition frequencies, matching them explicitly to theoretical bearing defect frequencies (**BPFI, BPFO, BSF**).
-
----
-
-## 📈 Engineering Evolution & Results
-
-Below is the comparative statistical breakdown of the detection matrix across the dataset spectrum:
-
-| Dataset File | Defect Type | Defect Severity | FFT Baseline Peak | Envelope Demod. Peak | Diagnostic Output | Status |
-| :--- | :--- | :---: | :---: | :---: | :--- | :---: |
-| `Time_Normal_1_098` | Healthy Baseline | `0.000"` | 29.5 Hz ($1\times\text{RPM}$) | None | **Normal Operation** | ✅ Pass |
-| `IR007_1_110` | Inner Race | `0.007"` | Masked / Noise | 162.2 Hz ($\approx\text{BPFI}$) | **Inner Race Fault** | ✅ Detected |
-| `OR021_6_1_239` | Outer Race | `0.021"` | 105.8 Hz ($\approx\text{BPFO}$) | 105.8 Hz ($\approx\text{BPFO}$) | **Critical Outer Race Fault**| ✅ Critical |
+### 3. Advanced Envelope Analysis (Hilbert Transform Demodulation)
+To unmask the latent micro-impact structural signatures of the inner race defect, amplitude demodulation was performed using the **Hilbert Transform**:
+* The full analytical signal was generated to extract the raw `amplitude_envelope`.
+* The envelope was statistically **detrended** (subtracting the mean) to suppress the dominant DC offset at $0\text{ Hz}$.
+* A secondary FFT was computed on this isolated envelope to generate the **Envelope Spectrum**, successfully shifting the diagnostic focus from background resonance to pure kinematic repetition rates matching the theoretical **BPFI** benchmark at **162.2 Hz** and its 2nd harmonic at **324.4 Hz**.
 
 ---
+
+## 📈 Engineering Evolution & Results: Overcoming the Resolution Bottleneck
+
+The pipeline was developed across five distinct evolutionary phases to systematically tackle spectral overlapping and resolve mechanical classification barriers. By transitioning from domain-agnostic statistics to physics-informed kinematic tracking, the model successfully resolved severe cross-class ambiguities:
+
+| Phase | Window Size | Feature Engineering Strategy | Overall Accuracy | Ball Fault (F1) | Outer Race (F1) | Mechanical & Signal Interpretation |
+| :---: | :---: | :--- | :---: | :---: | :---: | :--- |
+| **Phase 1** | 2,048 | Pure Statistical Only (Time-Domain & FFT Moments) | **89%** | 83% | 86% | Baseline model learns statistical patterns blindly but suffers from severe cross-class geometric ambiguity. |
+| **Phase 2** | 2,048 | Hybrid (Time Stats + $1\times$ Fundamental Envelope Spectrum) | **88%** | 81% | 84% | Accuracy plateaus due to the FFT Resolution Bottleneck ($\Delta f \approx 5.85\text{ Hz}$) causing severe spectral leakage. |
+| **Phase 3** | 4,096 | High-Resolution Hybrid (Doubled Time-Window) | **90%** | 84% | 88% | Notable performance leap as frequency bin shrinks to $\Delta f \approx 2.93\text{ Hz}$, concentrating the defect impact energy. |
+| **Phase 4** | 8,192 | Ultra-High Resolution Hybrid (Deepened Time-Window) | **94%** | 91% | 92% | Optimal fault isolation unlocked via a razor-sharp resolution of $\Delta f \approx 1.46\text{ Hz}$, eliminating harmonic smearing. |
+| **Phase 5** | 8,192 | Ultimate Physics-Informed (Full Kinematic Footprint: $1\times + 2\times$) | **94%** | 91% | **93%** | **Production-ready model.** Adding $2\times$ Harmonics stabilizes the classifier against non-linear modulation and physical masking. |
+
+### 🔍 Mathematical Root Cause of the Bottleneck
+In **Phase 2**, adding physics features counterintuitively dropped the performance because a window size of 2,048 points sampled at 12 kHz yielded a coarse frequency resolution:
+$$\Delta f = \frac{12000}{2048} \approx 5.85\text{ Hz}$$
+This caused severe **Spectral Leakage**, smearing the sharp amplitude spikes across adjacent frequency bins. 
+
+By expanding the window to 8,192 points in **Phase 4 & 5**, we contracted the spectral bin resolution to an ultra-precise minimum of:
+$$\Delta f = \frac{12000}{8192} \approx 1.46\text{ Hz}$$
+This deep localized physical clarity, combined with tracking the **2nd Harmonic ($2\times\text{BPFO}$)** in Phase 5, completely eliminated structural energy smearing and stabilized the model against mechanical non-linear modulations.
 
 ---
 
@@ -61,12 +70,21 @@ The architectural scaling from a 2,048 window to an 8,192 ultra-high resolution 
 
 ---
 
+## 🧠 What this Project Demonstrates to Recruiters
+
+1. **Physics-Informed Mindset:** I don't just blindly feed raw data into machine learning algorithms. I combine mechanical domain knowledge (bearing kinematics) with statistical learning to build deterministic, interpretable features.
+2. **Advanced DSP Engineering:** Proficient in real-world signal manipulation, including Fast Fourier Transform (FFT), frequency binning analysis, and Amplitude Demodulation via the Hilbert Transform.
+3. **Scientific Problem-Solving:** Successfully identified and resolved the *Frequency Resolution Bottleneck* and *Spectral Leakage* by mathematically optimization of window lengths ($\Delta f$ contraction from $5.85\text{ Hz}$ down to $1.46\text{ Hz}$).
+4. **Data Discretization & Structuring:** Experienced in segmenting continuous high-frequency multi-load sensor streams into stable, balanced statistical training configurations.
+
 ---
 
-## 🧠 Core Engineering Competencies Demonstrated
-1. **Advanced DSP Architectures:** Proficient with `scipy.signal` structures, Nyquist frequency boundaries, windowing, and analytical signal generation via Hilbert transforms.
-2. **Deterministic Modeling:** Built an automated rule-based diagnostic matrix that maps empirical frequency spectra directly onto physical kinematic defect equations ($1\times\text{RPM}$, $\text{BPFO}$, $\text{BPFI}$).
-3. **Domain Expertise (Mechanical Fault Diagnosis):** Demonstrates deep understanding of mechanical vibration physics, eliminating the need for vast training data by exploiting exact physical constraints.
+## 💻 Tech Stack
+* **Languages:** Python
+* **Signal Processing (DSP):** SciPy (Signal & FFT submodules)
+* **Data Processing:** NumPy, Pandas
+* **Machine Learning:** Scikit-Learn (Random Forest Classifier, Evaluation Metrics)
+* **Visualizations:** Custom Matplotlib and Seaborn spectrum overlays, heatmap confusion matrices, and time-series plots.
 
 ---
 
